@@ -60,7 +60,7 @@ with st.sidebar:
         ["Basic","Advanced","Pro"]
     )
 
-    st.button("Run Analysis 🚀")
+    run = st.button("Run Analysis 🚀")
 
     st.download_button(
         "Download Report",
