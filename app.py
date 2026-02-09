@@ -57,26 +57,43 @@ if "exchange" not in st.session_state:
 @st.cache_data(ttl=600)
 def get_stock_data(symbol, period):
 
-    symbol = symbol.upper().strip()
+    try:
+        symbol = symbol.upper().strip()
 
-    for suffix, exch in [(".NS","NSE"),(".BO","BSE")]:
-        try:
-            ticker = yf.Ticker(symbol + suffix)
+        # Try NSE
+        for suffix, exch in [(".NS","NSE"), (".BO","BSE")]:
 
-            data = ticker.history(
+            ticker = symbol + suffix
+            stock = yf.Ticker(ticker)
+
+            data = stock.history(
                 period=period.lower(),
                 auto_adjust=True
             )
 
-            info = ticker.info
-
             if not data.empty:
-                return data, info, exch
+                info = stock.info
+                return data, exch, info
 
-        except:
-            continue
 
-    return None, None, None
+        # Last fallback: Try raw symbol
+        stock = yf.Ticker(symbol)
+
+        data = stock.history(
+            period=period.lower(),
+            auto_adjust=True
+        )
+
+        if not data.empty:
+            info = stock.info
+            return data, "Global", info
+
+
+        return None, None, None
+    
+    except Exception as e:
+        return None, None, None
+
 
 
 
@@ -148,7 +165,7 @@ if run:
 
     with st.spinner("Fetching live data... 📡"):
 
-        data, info, exchange = get_stock_data(stock, period)
+        data, exchange, info = get_stock_data(stock, period)
 
     if data is None or data.empty:
         st.error("❌ Data unavailable. Try again later.")
@@ -156,8 +173,9 @@ if run:
 
     # Save in session
     st.session_state.data = data
-    st.session_state.info = info
     st.session_state.exchange = exchange
+    st.session_state.info = info
+
 
 # ---------------- AI SCORE ENGINE ----------------
 def calculate_ai_score(data):
