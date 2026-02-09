@@ -43,7 +43,7 @@ st.markdown("""
 with st.sidebar:
     st.title("📊 Capnalyx")
 
-    stock = st.text_input("Stock Symbol", "TCS")
+    stock = st.text_input("Stock Symbol (NSE)", "TCS")
 
     period = st.selectbox(
         "Time Period",
