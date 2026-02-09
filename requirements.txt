@@ -1,5 +1,6 @@
-streamlit
-plotly
+yfinance==0.2.40
 pandas
-yfinance
-reportlab
+plotly
+streamlit
+requests
+lxml
