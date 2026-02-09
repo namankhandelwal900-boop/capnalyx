@@ -3,6 +3,24 @@ import plotly.express as px
 import yfinance as yf
 import pandas as pd
 
+# ---------------- DEVELOPER PROFILE ----------------
+DEV_NAME = "Naman Khandelwal"
+DEV_EMAIL = "namankhandelwal900@gmail.com"
+DEV_LINKEDIN = "https://www.linkedin.com/in/naman-khandelwal09/"
+
+# ---------------- PDF DISCLAIMER ----------------
+PDF_DISCLAIMER = """
+Disclaimer:
+This report has been generated using AI-driven models and publicly available financial data.
+While reasonable efforts have been made to ensure accuracy, Capnalyx does not guarantee
+the completeness or reliability of the information.
+
+This document is intended for educational and informational purposes only and should not
+be considered as financial advice. Investors are advised to conduct their own research
+and consult with a qualified financial advisor before making any investment decisions.
+"""
+
+
 # ---------------- INDUSTRY MAP ----------------
 INDUSTRY_PEERS = {
     "IT": ["TCS", "INFY", "WIPRO", "HCLTECH", "TECHM"],
@@ -222,6 +240,11 @@ def generate_corporate_pdf(filename, stock, exchange, latest_price, fair_value, 
 
     elements.append(Paragraph("Disclaimer", styles["Heading2"]))
     elements.append(Paragraph("This report is for educational purposes only.", styles["Normal"]))
+    
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("Disclaimer", styles["Heading2"]))
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph(PDF_DISCLAIMER.replace("\n", "<br/>"), styles["Normal"]))
 
     doc.build(elements)
 
@@ -272,6 +295,11 @@ def generate_modern_pdf(filename, stock, exchange, latest_price, fair_value, ai_
     elements.append(Paragraph("• Strong momentum", styles["Normal"]))
     elements.append(Paragraph("• Stable volatility", styles["Normal"]))
     elements.append(Paragraph("• Positive long-term outlook", styles["Normal"]))
+    
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("Disclaimer ⚠️", styles["Heading2"]))
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph(PDF_DISCLAIMER.replace("\n", "<br/>"), styles["Normal"]))
 
     doc.build(elements)
 
@@ -550,3 +578,20 @@ with tabs[6]:
                     file_name=filename,
                     mime="application/pdf"
                 )
+                st.divider()
+
+st.markdown(f"""
+<div style="
+text-align:center;
+color:#9CA3AF;
+font-size:14px;
+margin-top:20px;
+">
+
+Developed by <b>{DEV_NAME}</b><br>
+📧 {DEV_EMAIL}<br>
+🔗 <a href="{DEV_LINKEDIN}" target="_blank">LinkedIn Profile</a>
+
+</div>
+""", unsafe_allow_html=True)
+
