@@ -151,4 +151,3 @@ with tabs[5]:
     st.subheader("📄 Reports")
 
     st.write("PDF & Excel reports coming soon.")
-a
