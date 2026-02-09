@@ -3,6 +3,30 @@ import plotly.express as px
 import yfinance as yf
 import pandas as pd
 
+# ---------------- INDUSTRY MAP ----------------
+INDUSTRY_PEERS = {
+    "IT": ["TCS", "INFY", "WIPRO", "HCLTECH", "TECHM"],
+    "BANK": ["HDFCBANK", "ICICIBANK", "SBIN", "AXISBANK"],
+    "FMCG": ["ITC", "HUL", "NESTLEIND", "DABUR"],
+    "POWER": ["NTPC", "TATAPOWER", "ADANIPOWER"],
+    "AUTO": ["TATAMOTORS", "M&M", "MARUTI"],
+}
+
+# ---------------- PEER SUGGESTION ----------------
+def suggest_peers(stock):
+
+    stock = stock.upper()
+
+    for sector, peers in INDUSTRY_PEERS.items():
+
+        if stock in peers:
+
+            return sector, peers
+
+    return None, []
+
+
+
 
 # ---------------- SESSION STATE ----------------
 if "data" not in st.session_state:
@@ -82,6 +106,11 @@ with st.sidebar:
     f"Stock Symbol ({exchange})",
     "TCS"
 )
+    portfolio = st.text_area(
+    "📌 Portfolio (Comma Separated)",
+    "TCS,INFY,ITC"
+)
+
 
     period = st.selectbox(
         "Time Period",
@@ -295,6 +324,37 @@ for col,(title,val) in zip(
         <h2>{val}</h2>
     </div>
     """, unsafe_allow_html=True)
+    
+    # ---------------- PORTFOLIO ENGINE ----------------
+def analyze_portfolio(stocks, period):
+
+    results = []
+
+    for s in stocks:
+
+        data, ex = get_stock_data(s.strip(), period)
+
+        if data is None or data.empty:
+            continue
+
+        price = round(data["Close"].iloc[-1], 2)
+        score = calculate_ai_score(data)
+
+        ret = round(
+            (data["Close"].iloc[-1] / data["Close"].iloc[0] - 1) * 100,
+            2
+        )
+
+        results.append({
+            "Stock": s,
+            "Exchange": ex,
+            "Price": price,
+            "Score": score,
+            "Return %": ret
+        })
+
+    return pd.DataFrame(results)
+
 
 
 # ---------------- TABS ----------------
@@ -304,21 +364,48 @@ tabs = st.tabs([
     "Valuation",
     "Charts",
     "Risk",
+    "Portfolio",
     "Reports"
 ])
 
 
+
+# ---------------- OVERVIEW ----------------
 # ---------------- OVERVIEW ----------------
 with tabs[0]:
 
     st.subheader("📌 Company Overview")
 
+    # Peer info
+    sector, peers = suggest_peers(stock)
+
+    if sector:
+        st.success(f"🏭 Sector: {sector}")
+        st.write("📊 Comparable Companies:")
+        st.write(", ".join(peers))
+    else:
+        st.info("No peer data available")
+
+    st.divider()
+
+    # Basic fundamentals (for now static, later dynamic)
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Market Cap", "₹12T")
+    col2.metric("ROE", "28%")
+    col3.metric("Debt / Equity", "0.12")
+    col4.metric("Promoter Holding", "52%")
+
+    st.divider()
+
+    st.write("📈 Business Summary")
+
     st.write("""
-    - Sector: IT Services  
-    - Market Cap: ₹12T  
-    - ROE: 28%  
-    - Debt/Equity: 0.12  
+    The company operates in core industry segments and has shown
+    consistent financial performance with stable margins and growth.
+    Long-term outlook remains positive based on sector trends.
     """)
+
 
 
 # ---------------- FINANCIALS ----------------
@@ -387,7 +474,35 @@ with tabs[4]:
 
 
 # ---------------- REPORTS ----------------
+
+# ---------------- PORTFOLIO ----------------
 with tabs[5]:
+
+    st.subheader("💼 Portfolio Tracker")
+
+    stocks = [x.strip() for x in portfolio.split(",")]
+
+    if st.button("Analyze Portfolio 📊"):
+
+        df = analyze_portfolio(stocks, period)
+
+        if df.empty:
+            st.error("No valid stocks found")
+        else:
+
+            st.dataframe(df, use_container_width=True)
+
+            st.metric(
+                "Best Performer",
+                df.loc[df["Return %"].idxmax()]["Stock"]
+            )
+
+            st.metric(
+                "Highest Score",
+                df.loc[df["Score"].idxmax()]["Stock"]
+            )
+
+with tabs[6]:
 
     if analysis_mode != "Pro":
         st.warning("🔒 Pro Feature: Download Reports")
