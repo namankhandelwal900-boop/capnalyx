@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.express as px
-import yfinance as yf
+import requests
+import time
 import pandas as pd
 
 # ---------------- DEVELOPER PROFILE ----------------
@@ -52,6 +53,100 @@ if "data" not in st.session_state:
 if "exchange" not in st.session_state:
     st.session_state.exchange = None
     
+# ---------------- NSE ENGINE ----------------
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br"
+}
+
+session = requests.Session()
+session.get("https://www.nseindia.com", headers=HEADERS)
+
+
+def fetch_nse_quote(symbol):
+
+    try:
+        url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
+
+        r = session.get(url, headers=HEADERS, timeout=10)
+
+        if r.status_code != 200:
+            return None
+
+        return r.json()
+
+    except:
+        return None
+
+
+def fetch_nse_history(symbol, years=5):
+
+    try:
+        end = pd.Timestamp.today()
+        start = end - pd.DateOffset(years=years)
+
+        url = "https://www.nseindia.com/api/historical/cm/equity"
+
+        params = {
+            "symbol": symbol,
+            "series": ["EQ"],
+            "from": start.strftime("%d-%m-%Y"),
+            "to": end.strftime("%d-%m-%Y")
+        }
+
+        r = session.get(url, headers=HEADERS, params=params, timeout=15)
+
+        if r.status_code != 200:
+            return None
+
+        data = r.json().get("data", [])
+
+        if not data:
+            return None
+
+        df = pd.DataFrame(data)
+
+        df["DATE"] = pd.to_datetime(df["CH_TIMESTAMP"])
+        df.set_index("DATE", inplace=True)
+
+        df = df.rename(columns={
+            "CH_OPENING_PRICE": "Open",
+            "CH_TRADE_HIGH_PRICE": "High",
+            "CH_TRADE_LOW_PRICE": "Low",
+            "CH_CLOSING_PRICE": "Close",
+            "CH_TOT_TRADED_QTY": "Volume"
+        })
+
+        return df[["Open","High","Low","Close","Volume"]]
+
+    except:
+        return None
+    
+def parse_nse_data(data):
+
+        try:
+            price = data["priceInfo"]["lastPrice"]
+
+            fundamentals = data["securityInfo"]
+
+            market_cap = data["priceInfo"].get("marketCap", 0)
+
+            pe = data["priceInfo"].get("pe", 0)
+
+            return {
+            "price": float(price),
+            "market_cap": market_cap,
+            "pe": pe,
+            "raw": data
+        }
+
+        except Exception:
+          return None
+
+
+    
 
 # ---------------- DATA FETCHER ----------------
 @st.cache_data(ttl=900, show_spinner=False)
@@ -59,31 +154,39 @@ def get_stock_data(symbol, period):
 
     symbol = symbol.upper().strip()
 
-    tickers = [
-        (symbol + ".NS", "NSE"),
-        (symbol + ".BO", "BSE"),
-        (symbol, "GLOBAL")
-    ]
+    years_map = {
+        "1Y": 1,
+        "3Y": 3,
+        "5Y": 5,
+        "10Y": 10
+    }
 
-    for ticker, exch in tickers:
+    years = years_map.get(period, 3)
 
-        try:
-            stock = yf.Ticker(ticker)
+    quote = fetch_nse_quote(symbol)
+    history = fetch_nse_history(symbol, years)
 
-            data = stock.history(
-                period=period.lower(),
-                auto_adjust=True,
-                timeout=20
-            )
+    if quote is None or history is None:
+        return None, None, None
 
-            if not data.empty:
-                info = stock.info
-                return data, exch, info
+    info = {}
 
-        except Exception:
-            continue
+    try:
+        meta = quote["info"]
 
-    return None, None, None
+        info["marketCap"] = meta.get("marketCap", 0)
+        info["trailingPE"] = meta.get("pE", 0)
+        info["sector"] = meta.get("industry", "N/A")
+        info["longBusinessSummary"] = meta.get("companyName", "")
+        info["returnOnEquity"] = 0
+        info["debtToEquity"] = 0
+        info["heldPercentInsiders"] = 0
+
+    except:
+        pass
+
+    return history, "NSE", info
+
 
 
 
@@ -153,23 +256,20 @@ with st.sidebar:
 
 
 # ---------------- FETCH DATA ----------------
+# ---------------- FETCH DATA ----------------
 if run:
 
     with st.spinner("Fetching live data... 📡"):
 
         data, exchange, info = get_stock_data(stock, period)
 
-    if data is None or data.empty:
+        if data is None or data.empty:
+            st.error("❌ NSE data blocked. Try after few minutes.")
+            st.stop()
 
-        st.error("❌ Yahoo Finance blocked request.")
-        st.warning("Try again after 2–3 minutes.")
-        st.info("Tip: Don't spam Run button.")
-
-        st.stop()
-
-    st.session_state.data = data
-    st.session_state.exchange = exchange
-    st.session_state.info = info
+        st.session_state.data = data
+        st.session_state.exchange = exchange
+        st.session_state.info = info
 
 
 # ---------------- AI SCORE ENGINE ----------------
@@ -360,10 +460,10 @@ if "Volume" in data.columns:
 pe = info.get("trailingPE", 0)
 industry_pe = 25   # basic benchmark
 
-if pe and pe > 0:
+if pe and pe > 0 and pe < 200:
     fair_value = latest_price * (industry_pe / pe)
 else:
-    fair_value = latest_price * 1.05
+    fair_value = latest_price * 1.10
 
 if fair_value > latest_price:
     ai_score += 10
@@ -408,7 +508,7 @@ def analyze_portfolio(stocks, period):
 
     for s in stocks:
 
-        data, ex = get_stock_data(s.strip(), period)
+        data, ex, _ = get_stock_data(s.strip(), period)
 
         if data is None or data.empty:
             continue
@@ -466,40 +566,40 @@ with tabs[0]:
 
     # ---------------- REAL FUNDAMENTALS ----------------
 
-market_cap = info.get("marketCap", 0)
-roe = info.get("returnOnEquity", 0)
-de_ratio = info.get("debtToEquity", 0)
-promoter = info.get("heldPercentInsiders", 0)
-sector_name = info.get("sector", "N/A")
-summary = info.get("longBusinessSummary", "Summary not available")
+    market_cap = info.get("marketCap", 0)
+    roe = info.get("returnOnEquity", 0)
+    de_ratio = info.get("debtToEquity", 0)
+    promoter = info.get("heldPercentInsiders", 0)
+    sector_name = info.get("sector", "N/A")
+    summary = info.get("longBusinessSummary", "Summary not available")
 
-col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4 = st.columns(4)
 
-col1.metric(
-    "Market Cap",
-    f"₹{market_cap/1e7:.2f} Cr" if market_cap else "N/A"
-)
+    col1.metric(
+        "Market Cap",
+        f"₹{market_cap/1e7:.2f} Cr" if market_cap else "N/A"
+    )
 
-col2.metric(
-    "ROE",
-    f"{roe*100:.2f}%" if roe else "N/A"
-)
+    col2.metric(
+        "ROE",
+        f"{roe*100:.2f}%" if roe else "N/A"
+    )
 
-col3.metric(
-    "Debt / Equity",
-    f"{de_ratio:.2f}" if de_ratio else "N/A"
-)
+    col3.metric(
+        "Debt / Equity",
+        f"{de_ratio:.2f}" if de_ratio else "N/A"
+    )
 
-col4.metric(
-    "Promoter Holding",
-    f"{promoter*100:.2f}%" if promoter else "N/A"
-)
+    col4.metric(
+        "Promoter Holding",
+        f"{promoter*100:.2f}%" if promoter else "N/A"
+    )
 
-st.divider()
+    st.divider()
 
-st.subheader("📄 Business Summary")
+    st.subheader("📄 Business Summary")
 
-st.write(summary)
+    st.write(summary)
 
 
 
