@@ -54,45 +54,37 @@ if "exchange" not in st.session_state:
     
 
 # ---------------- DATA FETCHER ----------------
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=900, show_spinner=False)
 def get_stock_data(symbol, period):
 
-    try:
-        symbol = symbol.upper().strip()
+    symbol = symbol.upper().strip()
 
-        # Try NSE
-        for suffix, exch in [(".NS","NSE"), (".BO","BSE")]:
+    tickers = [
+        (symbol + ".NS", "NSE"),
+        (symbol + ".BO", "BSE"),
+        (symbol, "GLOBAL")
+    ]
 
-            ticker = symbol + suffix
+    for ticker, exch in tickers:
+
+        try:
             stock = yf.Ticker(ticker)
 
             data = stock.history(
                 period=period.lower(),
-                auto_adjust=True
+                auto_adjust=True,
+                timeout=20
             )
 
             if not data.empty:
                 info = stock.info
                 return data, exch, info
 
+        except Exception:
+            continue
 
-        # Last fallback: Try raw symbol
-        stock = yf.Ticker(symbol)
+    return None, None, None
 
-        data = stock.history(
-            period=period.lower(),
-            auto_adjust=True
-        )
-
-        if not data.empty:
-            info = stock.info
-            return data, "Global", info
-
-
-        return None, None, None
-    
-    except Exception as e:
-        return None, None, None
 
 
 
@@ -168,10 +160,13 @@ if run:
         data, exchange, info = get_stock_data(stock, period)
 
     if data is None or data.empty:
-        st.error("❌ Data unavailable. Try again later.")
+
+        st.error("❌ Yahoo Finance blocked request.")
+        st.warning("Try again after 2–3 minutes.")
+        st.info("Tip: Don't spam Run button.")
+
         st.stop()
 
-    # Save in session
     st.session_state.data = data
     st.session_state.exchange = exchange
     st.session_state.info = info
