@@ -2,27 +2,32 @@ import streamlit as st
 import plotly.express as px
 import yfinance as yf
 import pandas as pd
+
+
+# ---------------- SESSION STATE ----------------
 if "data" not in st.session_state:
     st.session_state.data = None
 
-if "info" not in st.session_state:
-    st.session_state.info = None
 
-
-@st.cache_data(ttl=300)
+# ---------------- DATA FETCHER ----------------
+@st.cache_data(ttl=600)
 def get_stock_data(symbol, period):
-    if ".NS" not in symbol and ".BO" not in symbol:
-        symbol = symbol + ".NS"   # NSE by default
 
-    stock = yf.Ticker(symbol)
+    try:
+        if ".NS" not in symbol and ".BO" not in symbol:
+            symbol = symbol + ".NS"   # NSE default
 
-    data = stock.history(
-        period=period.lower()
-    )
+        stock = yf.Ticker(symbol)
 
-    info = stock.info
+        data = stock.history(
+            period=period.lower(),
+            auto_adjust=True
+        )
 
-    return data, info
+        return data
+
+    except Exception:
+        return None
 
 
 # ---------------- CONFIG ----------------
@@ -31,6 +36,7 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
+
 
 # ---------------- CSS ----------------
 st.markdown("""
@@ -45,8 +51,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 # ---------------- SIDEBAR ----------------
 with st.sidebar:
+
     st.title("📊 Capnalyx")
 
     stock = st.text_input("Stock Symbol (NSE)", "TCS")
@@ -72,17 +80,21 @@ with st.sidebar:
         "Download Report",
         "Coming Soon"
     )
-    if run:
-      with st.spinner("Fetching live data... 📡"):
-        data, info = get_stock_data(stock, period)
 
-      if data.empty:
-        st.error("❌ No data found. Check stock symbol.")
+
+# ---------------- FETCH DATA ----------------
+if run:
+
+    with st.spinner("Fetching live data... 📡"):
+
+        data = get_stock_data(stock, period)
+
+    if data is None or data.empty:
+        st.error("❌ Data unavailable. Try again later.")
         st.stop()
 
     # Save in session
     st.session_state.data = data
-    st.session_state.info = info
 
 
 # ---------------- HEADER ----------------
@@ -90,20 +102,22 @@ st.title("📈 Capnalyx – Intelligent Stock Analysis")
 
 st.caption("AI-Powered Financial Scoring & Valuation")
 
-# Use stored data
+
+# ---------------- USE STORED DATA ----------------
 data = st.session_state.data
 
-if data is not None:
-    latest_price = round(data["Close"].iloc[-1], 2)
-else:
+if data is None:
     st.info("👈 Enter stock and click Run Analysis")
     st.stop()
 
 
-# ---------------- KPI CARDS ----------------
-col1,col2,col3,col4,col5 = st.columns(5)
+latest_price = round(data["Close"].iloc[-1], 2)
 
-fair_value = round(latest_price * 1.08, 2)  # Demo valuation
+
+# ---------------- KPI CARDS ----------------
+col1, col2, col3, col4, col5 = st.columns(5)
+
+fair_value = round(latest_price * 1.08, 2)
 upside = round((fair_value/latest_price - 1)*100, 2)
 
 metrics = [
@@ -125,6 +139,7 @@ for col,(title,val) in zip(
     </div>
     """, unsafe_allow_html=True)
 
+
 # ---------------- TABS ----------------
 tabs = st.tabs([
     "Overview",
@@ -135,8 +150,10 @@ tabs = st.tabs([
     "Reports"
 ])
 
+
 # ---------------- OVERVIEW ----------------
 with tabs[0]:
+
     st.subheader("📌 Company Overview")
 
     st.write("""
@@ -146,8 +163,10 @@ with tabs[0]:
     - Debt/Equity: 0.12  
     """)
 
+
 # ---------------- FINANCIALS ----------------
 with tabs[1]:
+
     st.subheader("📑 Financial Statements")
 
     st.dataframe({
@@ -156,17 +175,21 @@ with tabs[1]:
         "Profit":[18,22,27]
     })
 
+
 # ---------------- VALUATION ----------------
 with tabs[2]:
+
     st.subheader("💰 Valuation Model")
 
     st.write("DCF & Relative Valuation")
 
-    st.metric("Intrinsic Value","₹1240")
-    st.metric("Margin of Safety","12%")
+    st.metric("Intrinsic Value", f"₹{fair_value}")
+    st.metric("Margin of Safety", "12%")
+
 
 # ---------------- CHARTS ----------------
 with tabs[3]:
+
     st.subheader("📊 Performance Chart")
 
     fig = px.line(
@@ -178,8 +201,10 @@ with tabs[3]:
 
     st.plotly_chart(fig, use_container_width=True)
 
+
 # ---------------- RISK ----------------
 with tabs[4]:
+
     st.subheader("⚠️ Risk Analysis")
 
     st.progress(70)
@@ -191,8 +216,10 @@ with tabs[4]:
     ✔ Valuation Risk: Medium  
     """)
 
+
 # ---------------- REPORTS ----------------
 with tabs[5]:
+
     st.subheader("📄 Reports")
 
     st.write("PDF & Excel reports coming soon.")
