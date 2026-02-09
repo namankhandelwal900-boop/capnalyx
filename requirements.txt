@@ -5,4 +5,4 @@ jinja2
 reportlab
 python-multipart
 setuptools
-wheel
+whee
