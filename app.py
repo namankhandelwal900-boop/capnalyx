@@ -7,6 +7,13 @@ import pandas as pd
 # ---------------- SESSION STATE ----------------
 if "data" not in st.session_state:
     st.session_state.data = None
+if "exchange" not in st.session_state:
+    st.session_state.exchange = None
+    
+if st.session_state.exchange:
+    st.caption(f"📍 Data Source: {st.session_state.exchange}")
+
+
 
 
 # ---------------- DATA FETCHER ----------------
@@ -14,20 +21,37 @@ if "data" not in st.session_state:
 def get_stock_data(symbol, period):
 
     try:
-        if ".NS" not in symbol and ".BO" not in symbol:
-            symbol = symbol + ".NS"   # NSE default
+        symbol = symbol.upper().strip()
 
-        stock = yf.Ticker(symbol)
+        # Try NSE first
+        nse_symbol = symbol + ".NS"
+        stock_nse = yf.Ticker(nse_symbol)
 
-        data = stock.history(
+        data = stock_nse.history(
             period=period.lower(),
             auto_adjust=True
         )
 
-        return data
+        if not data.empty:
+            return data, "NSE"
+
+        # If NSE fails → Try BSE
+        bse_symbol = symbol + ".BO"
+        stock_bse = yf.Ticker(bse_symbol)
+
+        data = stock_bse.history(
+            period=period.lower(),
+            auto_adjust=True
+        )
+
+        if not data.empty:
+            return data, "BSE"
+
+        return None, None
 
     except Exception:
-        return None
+        return None, None
+
 
 
 # ---------------- CONFIG ----------------
@@ -87,7 +111,7 @@ if run:
 
     with st.spinner("Fetching live data... 📡"):
 
-        data = get_stock_data(stock, period)
+        data, exchange = get_stock_data(stock, period)
 
     if data is None or data.empty:
         st.error("❌ Data unavailable. Try again later.")
@@ -95,6 +119,8 @@ if run:
 
     # Save in session
     st.session_state.data = data
+    st.session_state.exchange = exchange
+
 
 
 # ---------------- HEADER ----------------
