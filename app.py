@@ -2,6 +2,11 @@ import streamlit as st
 import plotly.express as px
 import yfinance as yf
 import pandas as pd
+if "data" not in st.session_state:
+    st.session_state.data = None
+
+if "info" not in st.session_state:
+    st.session_state.info = None
 
 
 @st.cache_data(ttl=300)
@@ -68,20 +73,32 @@ with st.sidebar:
         "Coming Soon"
     )
     if run:
-        with st.spinner("Fetching live data... 📡"):
-            data, info = get_stock_data(stock, period)
-  
-        if data.empty:
-            st.error("❌ No data found. Check stock symbol.")
-            st.stop()
+      with st.spinner("Fetching live data... 📡"):
+        data, info = get_stock_data(stock, period)
 
-    latest_price = round(data["Close"].iloc[-1], 2)
+      if data.empty:
+        st.error("❌ No data found. Check stock symbol.")
+        st.stop()
+
+    # Save in session
+    st.session_state.data = data
+    st.session_state.info = info
 
 
 # ---------------- HEADER ----------------
 st.title("📈 Capnalyx – Intelligent Stock Analysis")
 
 st.caption("AI-Powered Financial Scoring & Valuation")
+
+# Use stored data
+data = st.session_state.data
+
+if data is not None:
+    latest_price = round(data["Close"].iloc[-1], 2)
+else:
+    st.info("👈 Enter stock and click Run Analysis")
+    st.stop()
+
 
 # ---------------- KPI CARDS ----------------
 col1,col2,col3,col4,col5 = st.columns(5)
