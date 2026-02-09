@@ -104,14 +104,15 @@ st.caption("AI-Powered Financial Scoring & Valuation")
 
 
 # ---------------- USE STORED DATA ----------------
-data = st.session_state.data
+data = st.session_state.get("data")
 
-if data is None:
+if data is None or not isinstance(data, pd.DataFrame) or data.empty:
+
     st.info("👈 Enter stock and click Run Analysis")
     st.stop()
 
-
-latest_price = round(data["Close"].iloc[-1], 2)
+# Safe to use now
+latest_price = round(float(data["Close"].iloc[-1]), 2)
 
 
 # ---------------- KPI CARDS ----------------
