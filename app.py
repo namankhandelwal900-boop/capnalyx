@@ -10,11 +10,6 @@ if "data" not in st.session_state:
 if "exchange" not in st.session_state:
     st.session_state.exchange = None
     
-if st.session_state.exchange:
-    st.caption(f"📍 Data Source: {st.session_state.exchange}")
-
-
-
 
 # ---------------- DATA FETCHER ----------------
 @st.cache_data(ttl=600)
@@ -81,7 +76,12 @@ with st.sidebar:
 
     st.title("📊 Capnalyx")
 
-    stock = st.text_input("Stock Symbol (NSE)", "TCS")
+    exchange = st.session_state.get("exchange", "Auto")
+
+    stock = st.text_input(
+    f"Stock Symbol ({exchange})",
+    "TCS"
+)
 
     period = st.selectbox(
         "Time Period",
@@ -104,6 +104,7 @@ with st.sidebar:
         "Download Report",
         "Coming Soon"
     )
+    analysis_mode = mode
 
 
 # ---------------- FETCH DATA ----------------
@@ -121,10 +122,42 @@ if run:
     st.session_state.data = data
     st.session_state.exchange = exchange
 
+# ---------------- AI SCORE ENGINE ----------------
+def calculate_ai_score(data):
+
+    returns = data["Close"].pct_change().mean() * 252
+    volatility = data["Close"].pct_change().std() * (252 ** 0.5)
+
+    sma50 = data["Close"].rolling(50).mean()
+    sma200 = data["Close"].rolling(200).mean()
+
+    trend = 1 if sma50.iloc[-1] > sma200.iloc[-1] else 0
+
+    momentum = (data["Close"].iloc[-1] / data["Close"].iloc[-60]) - 1
+
+    return_score = min(max(returns * 100, 0), 25)
+    vol_score = min(max((0.4 - volatility) * 50, 0), 20)
+    trend_score = 25 if trend else 10
+    momentum_score = min(max(momentum * 100, 0), 15)
+    stability_score = 15 if volatility < 0.25 else 7
+
+    total = (
+        return_score +
+        vol_score +
+        trend_score +
+        momentum_score +
+        stability_score
+    )
+
+    return round(total, 1)
+
 
 
 # ---------------- HEADER ----------------
 st.title("📈 Capnalyx – Intelligent Stock Analysis")
+if st.session_state.exchange:
+    st.caption(f"📍 Data Source: {st.session_state.exchange}")
+
 
 st.caption("AI-Powered Financial Scoring & Valuation")
 
@@ -139,6 +172,7 @@ if data is None or not isinstance(data, pd.DataFrame) or data.empty:
 
 # Safe to use now
 latest_price = round(float(data["Close"].iloc[-1]), 2)
+ai_score = calculate_ai_score(data)
 
 
 # ---------------- KPI CARDS ----------------
@@ -148,7 +182,9 @@ fair_value = round(latest_price * 1.08, 2)
 upside = round((fair_value/latest_price - 1)*100, 2)
 
 metrics = [
-    ("Score","82/100"),
+    ("Score",
+     f"{ai_score}/100" if analysis_mode != "Basic" else "—"
+),
     ("Fair Value",f"₹{fair_value}"),
     ("Market Price",f"₹{latest_price}"),
     ("Upside",f"+{upside}%"),
@@ -204,14 +240,20 @@ with tabs[1]:
 
 
 # ---------------- VALUATION ----------------
+# ---------------- VALUATION ----------------
 with tabs[2]:
 
-    st.subheader("💰 Valuation Model")
+    if analysis_mode == "Basic":
+        st.warning("🔒 Upgrade to Advanced/Pro for Valuation")
 
-    st.write("DCF & Relative Valuation")
+    else:
+        st.subheader("💰 Valuation Model")
 
-    st.metric("Intrinsic Value", f"₹{fair_value}")
-    st.metric("Margin of Safety", "12%")
+        st.write("DCF & Relative Valuation")
+
+        st.metric("Intrinsic Value", f"₹{fair_value}")
+        st.metric("Margin of Safety", "12%")
+
 
 
 # ---------------- CHARTS ----------------
@@ -230,23 +272,34 @@ with tabs[3]:
 
 
 # ---------------- RISK ----------------
+# ---------------- RISK ----------------
 with tabs[4]:
 
-    st.subheader("⚠️ Risk Analysis")
+    if analysis_mode == "Basic":
+        st.warning("🔒 Upgrade to Advanced/Pro for Risk Analysis")
 
-    st.progress(70)
+    else:
+        st.subheader("⚠️ Risk Analysis")
 
-    st.write("""
-    ✔ Market Risk: Medium  
-    ✔ Business Risk: Low  
-    ✔ Financial Risk: Low  
-    ✔ Valuation Risk: Medium  
-    """)
+        st.progress(70)
+
+        st.write("""
+        ✔ Market Risk: Medium  
+        ✔ Business Risk: Low  
+        ✔ Financial Risk: Low  
+        ✔ Valuation Risk: Medium  
+        """)
+
 
 
 # ---------------- REPORTS ----------------
+# ---------------- REPORTS ----------------
 with tabs[5]:
 
-    st.subheader("📄 Reports")
+    if analysis_mode != "Pro":
+        st.warning("🔒 Pro Feature: Download Reports")
 
-    st.write("PDF & Excel reports coming soon.")
+    else:
+        st.subheader("📄 Reports")
+
+        st.write("PDF & Excel reports coming soon.")
