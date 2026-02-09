@@ -19,6 +19,7 @@ def get_stock_data(symbol, period):
 
     return data, info
 
+
 # ---------------- CONFIG ----------------
 st.set_page_config(
     page_title="Capnalyx",
@@ -66,6 +67,16 @@ with st.sidebar:
         "Download Report",
         "Coming Soon"
     )
+    if run:
+        with st.spinner("Fetching live data... 📡"):
+            data, info = get_stock_data(stock, period)
+  
+        if data.empty:
+            st.error("❌ No data found. Check stock symbol.")
+            st.stop()
+
+    latest_price = round(data["Close"].iloc[-1], 2)
+
 
 # ---------------- HEADER ----------------
 st.title("📈 Capnalyx – Intelligent Stock Analysis")
@@ -75,13 +86,17 @@ st.caption("AI-Powered Financial Scoring & Valuation")
 # ---------------- KPI CARDS ----------------
 col1,col2,col3,col4,col5 = st.columns(5)
 
+fair_value = round(latest_price * 1.08, 2)  # Demo valuation
+upside = round((fair_value/latest_price - 1)*100, 2)
+
 metrics = [
     ("Score","82/100"),
-    ("Fair Value","₹1240"),
-    ("Market Price","₹1150"),
-    ("Upside","+7.8%"),
+    ("Fair Value",f"₹{fair_value}"),
+    ("Market Price",f"₹{latest_price}"),
+    ("Upside",f"+{upside}%"),
     ("Risk","Medium")
 ]
+
 
 for col,(title,val) in zip(
     [col1,col2,col3,col4,col5],metrics
@@ -137,16 +152,11 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("📊 Performance Chart")
 
-    data = {
-        "Year":["2020","2021","2022","2023","2024"],
-        "Price":[500,720,890,1020,1150]
-    }
-
     fig = px.line(
         data,
-        x="Year",
-        y="Price",
-        title="Stock Price Growth"
+        x=data.index,
+        y="Close",
+        title=f"{stock.upper()} Price Trend"
     )
 
     st.plotly_chart(fig, use_container_width=True)
