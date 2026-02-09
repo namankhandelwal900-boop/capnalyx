@@ -57,37 +57,26 @@ if "exchange" not in st.session_state:
 @st.cache_data(ttl=600)
 def get_stock_data(symbol, period):
 
-    try:
-        symbol = symbol.upper().strip()
+    symbol = symbol.upper().strip()
 
-        # Try NSE first
-        nse_symbol = symbol + ".NS"
-        stock_nse = yf.Ticker(nse_symbol)
+    for suffix, exch in [(".NS","NSE"),(".BO","BSE")]:
+        try:
+            ticker = yf.Ticker(symbol + suffix)
 
-        data = stock_nse.history(
-            period=period.lower(),
-            auto_adjust=True
-        )
+            data = ticker.history(
+                period=period.lower(),
+                auto_adjust=True
+            )
 
-        if not data.empty:
-            return data, "NSE"
+            info = ticker.info
 
-        # If NSE fails → Try BSE
-        bse_symbol = symbol + ".BO"
-        stock_bse = yf.Ticker(bse_symbol)
+            if not data.empty:
+                return data, info, exch
 
-        data = stock_bse.history(
-            period=period.lower(),
-            auto_adjust=True
-        )
+        except:
+            continue
 
-        if not data.empty:
-            return data, "BSE"
-
-        return None, None
-
-    except Exception:
-        return None, None
+    return None, None, None
 
 
 
@@ -159,7 +148,7 @@ if run:
 
     with st.spinner("Fetching live data... 📡"):
 
-        data, exchange = get_stock_data(stock, period)
+        data, info, exchange = get_stock_data(stock, period)
 
     if data is None or data.empty:
         st.error("❌ Data unavailable. Try again later.")
@@ -167,6 +156,7 @@ if run:
 
     # Save in session
     st.session_state.data = data
+    st.session_state.info = info
     st.session_state.exchange = exchange
 
 # ---------------- AI SCORE ENGINE ----------------
@@ -315,6 +305,8 @@ st.caption("AI-Powered Financial Scoring & Valuation")
 
 # ---------------- USE STORED DATA ----------------
 data = st.session_state.get("data")
+info = st.session_state.get("info", {})
+
 
 if data is None or not isinstance(data, pd.DataFrame) or data.empty:
 
@@ -323,14 +315,57 @@ if data is None or not isinstance(data, pd.DataFrame) or data.empty:
 
 # Safe to use now
 latest_price = round(float(data["Close"].iloc[-1]), 2)
-ai_score = calculate_ai_score(data)
+# ---------------- AI SCORE (Rule-Based) ----------------
+
+ai_score = 50  # Base score
+
+# Trend (Price Momentum)
+returns = data["Close"].pct_change().dropna()
+
+if returns.mean() > 0.002:
+    ai_score += 15
+elif returns.mean() < 0:
+    ai_score -= 10
+
+# Volatility (Risk)
+volatility = returns.std()
+
+if volatility < 0.02:
+    ai_score += 10
+elif volatility > 0.05:
+    ai_score -= 10
+
+# Volume Strength (if available)
+if "Volume" in data.columns:
+    avg_vol = data["Volume"].mean()
+
+    if avg_vol > data["Volume"].median():
+        ai_score += 5
+
+# Valuation vs Price
+
+pe = info.get("trailingPE", 0)
+industry_pe = 25   # basic benchmark
+
+if pe and pe > 0:
+    fair_value = latest_price * (industry_pe / pe)
+else:
+    fair_value = latest_price * 1.05
+
+if fair_value > latest_price:
+    ai_score += 10
+else:
+    ai_score -= 5
+
+# Clamp between 0–100
+ai_score = max(0, min(100, ai_score))
 
 
 # ---------------- KPI CARDS ----------------
 col1, col2, col3, col4, col5 = st.columns(5)
 
-fair_value = round(latest_price * 1.08, 2)
-upside = round((fair_value/latest_price - 1)*100, 2)
+
+upside = round((fair_value/latest_price - 1)*100,2)
 
 metrics = [
     ("Score",
@@ -416,23 +451,43 @@ with tabs[0]:
 
     st.divider()
 
-    # Basic fundamentals (for now static, later dynamic)
-    col1, col2, col3, col4 = st.columns(4)
+    # ---------------- REAL FUNDAMENTALS ----------------
 
-    col1.metric("Market Cap", "₹12T")
-    col2.metric("ROE", "28%")
-    col3.metric("Debt / Equity", "0.12")
-    col4.metric("Promoter Holding", "52%")
+market_cap = info.get("marketCap", 0)
+roe = info.get("returnOnEquity", 0)
+de_ratio = info.get("debtToEquity", 0)
+promoter = info.get("heldPercentInsiders", 0)
+sector_name = info.get("sector", "N/A")
+summary = info.get("longBusinessSummary", "Summary not available")
 
-    st.divider()
+col1, col2, col3, col4 = st.columns(4)
 
-    st.write("📈 Business Summary")
+col1.metric(
+    "Market Cap",
+    f"₹{market_cap/1e7:.2f} Cr" if market_cap else "N/A"
+)
 
-    st.write("""
-    The company operates in core industry segments and has shown
-    consistent financial performance with stable margins and growth.
-    Long-term outlook remains positive based on sector trends.
-    """)
+col2.metric(
+    "ROE",
+    f"{roe*100:.2f}%" if roe else "N/A"
+)
+
+col3.metric(
+    "Debt / Equity",
+    f"{de_ratio:.2f}" if de_ratio else "N/A"
+)
+
+col4.metric(
+    "Promoter Holding",
+    f"{promoter*100:.2f}%" if promoter else "N/A"
+)
+
+st.divider()
+
+st.subheader("📄 Business Summary")
+
+st.write(summary)
+
 
 
 
