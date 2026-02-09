@@ -1,5 +1,23 @@
 import streamlit as st
 import plotly.express as px
+import yfinance as yf
+import pandas as pd
+
+
+@st.cache_data(ttl=300)
+def get_stock_data(symbol, period):
+    if ".NS" not in symbol and ".BO" not in symbol:
+        symbol = symbol + ".NS"   # NSE by default
+
+    stock = yf.Ticker(symbol)
+
+    data = stock.history(
+        period=period.lower()
+    )
+
+    info = stock.info
+
+    return data, info
 
 # ---------------- CONFIG ----------------
 st.set_page_config(
