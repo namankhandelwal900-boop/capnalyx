@@ -71,22 +71,47 @@ def get_screener_data(symbol):
 @st.cache_data(ttl=900)
 def get_stock_data(symbol, period):
 
-    ticker = symbol.upper() + ".NS"
+    symbol = symbol.upper().strip()
 
+    # Try Yahoo first
     try:
-        stock = yf.Ticker(ticker)
+        ticker = yf.Ticker(symbol + ".NS")
 
-        data = stock.history(period=period.lower())
+        data = ticker.history(period=period.lower())
 
-        if data.empty:
-            return None, None
-
-        info = stock.info
-
-        return data, info
+        if not data.empty:
+            return data, ticker.info
 
     except:
-        return None, None
+        pass
+
+
+    # Fallback: Stooq (Backup)
+    try:
+        url = f"https://stooq.pl/q/d/l/?s={symbol.lower()}&i=d"
+
+        df = pd.read_csv(url)
+
+        if not df.empty:
+
+            df["Date"] = pd.to_datetime(df["Date"])
+            df.set_index("Date", inplace=True)
+
+            df = df.rename(columns={
+                "Open":"Open",
+                "High":"High",
+                "Low":"Low",
+                "Close":"Close",
+                "Volume":"Volume"
+            })
+
+            return df, {}
+
+    except:
+        pass
+
+
+    return None, None
 
 
 # ---------------- AI SCORE ----------------
@@ -165,7 +190,7 @@ with st.spinner("Fetching data... 📡"):
 
 if data is None or data.empty:
 
-    st.error("❌ Failed to fetch Yahoo data")
+    st.error("❌ Market data unavailable (Yahoo & Backup failed)")
     st.stop()
 
 
