@@ -3,3 +3,9 @@ pandas
 plotly
 requests
 reportlab
+yfinance
+beautifulsoup4
+fastapi
+jinja2
+python-multipart
+uvicorn
