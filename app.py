@@ -72,44 +72,52 @@ def get_screener_data(symbol):
 def get_stock_data(symbol, period):
 
     symbol = symbol.upper().strip()
-
-    # Try Yahoo first
+    
+    # 1. Try Yahoo Finance (NSE)
     try:
         ticker = yf.Ticker(symbol + ".NS")
-
         data = ticker.history(period=period.lower())
-
         if not data.empty:
-            return data, ticker.info
-
+            # Safely get info
+            try:
+                info = ticker.info
+            except:
+                info = {"shortName": symbol}
+            return data, info
     except:
         pass
 
-
-    # Fallback: Stooq (Backup)
+    # 2. Try Yahoo Finance (BSE)
     try:
-        url = f"https://stooq.pl/q/d/l/?s={symbol.lower()}&i=d"
+        ticker = yf.Ticker(symbol + ".BO")
+        data = ticker.history(period=period.lower())
+        if not data.empty:
+            try:
+                info = ticker.info
+            except:
+                info = {"shortName": symbol}
+            return data, info
+    except:
+        pass
 
+    # 3. Try Direct Download (Yahoo) - Sometimes more reliable than Ticker object
+    try:
+        data = yf.download(f"{symbol}.NS", period=period.lower(), progress=False)
+        if not data.empty:
+            return data, {"shortName": symbol}
+    except:
+        pass
+
+    # 4. Fallback: Stooq (Backup) - Using .IN for Indian stocks
+    try:
+        url = f"https://stooq.pl/q/d/l/?s={symbol.lower()}.in&i=d"
         df = pd.read_csv(url)
-
         if not df.empty:
-
             df["Date"] = pd.to_datetime(df["Date"])
             df.set_index("Date", inplace=True)
-
-            df = df.rename(columns={
-                "Open":"Open",
-                "High":"High",
-                "Low":"Low",
-                "Close":"Close",
-                "Volume":"Volume"
-            })
-
-            return df, {}
-
+            return df, {"shortName": symbol}
     except:
         pass
-
 
     return None, None
 
