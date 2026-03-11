@@ -119,6 +119,20 @@ def get_stock_data(symbol, period):
     except:
         pass
 
+    # Final Check and Column Normalization
+    if data is not None and not data.empty:
+        # Normalize columns (some sources return lowercase or different names)
+        data.columns = [str(c).capitalize() for c in data.columns]
+        
+        # Ensure we have the required 'Close' column
+        if "Close" not in data.columns:
+            if "Adj close" in data.columns:
+                data["Close"] = data["Adj close"]
+            else:
+                return None, None
+        
+        return data, info
+
     return None, None
 
 
